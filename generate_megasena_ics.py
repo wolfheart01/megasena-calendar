@@ -41,58 +41,73 @@ def parse_draws(html):
     draws = []
 
     for box in calendar_boxes:
-        # Each calendar-box contains one draw:
-        #   <div class="date">Terça-feira, 10 de março de 2026</div>
+        # Inside each calendar-box, the structure repeats:
+        #   <div class="date">...</div>
         #   <div class="bottom">
         #       ...
         #       <div class="number">2982</div>
         #       ...
         #   </div>
+        #   <div class="date">...</div>
+        #   <div class="bottom">...</div>
+        #   ...
 
-        date_div = box.select_one("div.date")
-        number_div = box.select_one("div.bottom div.number")
+        date_divs = box.select("div.date")
 
-        if not date_div or not number_div:
-            continue
+        for date_div in date_divs:
+            # Find the next sibling div with class "bottom"
+            bottom_div = None
+            for sib in date_div.next_siblings:
+                if getattr(sib, "name", None) == "div":
+                    classes = sib.get("class", [])
+                    if "bottom" in classes:
+                        bottom_div = sib
+                        break
 
-        date_text = date_div.get_text(strip=True)
-        contest_text = number_div.get_text(strip=True)
+            if bottom_div is None:
+                continue
 
-        # Extract contest number (e.g. "2982")
-        contest_num_match = re.search(r"(\d+)", contest_text)
-        if not contest_num_match:
-            continue
-        contest_num = contest_num_match.group(1)
+            number_div = bottom_div.select_one("div.number")
+            if not number_div:
+                continue
 
-        # Extract date from something like:
-        # "Terça-feira, 10 de março de 2026"
-        # We'll strip weekday and focus on "10 de março de 2026"
-        # by finding the first digit and slicing from there.
-        m = re.search(r"(\d{1,2}\s+de\s+[a-zçãé]+\s+de\s+\d{4})", date_text, re.IGNORECASE)
-        if not m:
-            continue
+            date_text = date_div.get_text(strip=True)
+            contest_text = number_div.get_text(strip=True)
 
-        date_core = m.group(1)  # "10 de março de 2026"
-        parts = date_core.lower().split()
-        # parts: ["10", "de", "março", "de", "2026"]
-        try:
-            day = int(parts[0])
-            month_name = parts[2]
-            year = int(parts[4])
-        except (IndexError, ValueError):
-            continue
+            # Contest number
+            contest_num_match = re.search(r"(\d+)", contest_text)
+            if not contest_num_match:
+                continue
+            contest_num = contest_num_match.group(1)
 
-        month = month_map.get(month_name)
-        if not month:
-            continue
+            # Date like "Terça-feira, 10 de março de 2026"
+            m = re.search(
+                r"(\d{1,2}\s+de\s+[a-zçãé]+\s+de\s+\d{4})",
+                date_text,
+                re.IGNORECASE,
+            )
+            if not m:
+                continue
 
-        # 12:00 BRT
-        local_dt = datetime(year, month, day, 12, 0, tzinfo=BRT)
+            date_core = m.group(1).lower()  # "10 de março de 2026"
+            parts = date_core.split()
+            try:
+                day = int(parts[0])
+                month_name = parts[2]
+                year = int(parts[4])
+            except (IndexError, ValueError):
+                continue
 
-        draws.append({
-            "contest": contest_num,
-            "date": local_dt
-        })
+            month = month_map.get(month_name)
+            if not month:
+                continue
+
+            local_dt = datetime(year, month, day, 12, 0, tzinfo=BRT)
+
+            draws.append({
+                "contest": contest_num,
+                "date": local_dt
+            })
 
     # Deduplicate by contest number (keep earliest date)
     unique = {}
