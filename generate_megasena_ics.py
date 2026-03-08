@@ -18,7 +18,7 @@ def parse_draws(html):
     Returns a list of dicts:
     [
       {
-        "contest": "2981",
+        "contest": "2982",
         "date": datetime(2026, 3, 10, 12, 0, tzinfo=BRT)
       },
       ...
@@ -27,14 +27,10 @@ def parse_draws(html):
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # Only look inside the real calendar containers
     calendar_boxes = soup.select("div.calendar-box")
-
-    # If structure changes, fallback to whole page (optional)
     if not calendar_boxes:
-        calendar_boxes = [soup]
+        return []
 
-    # Portuguese month mapping
     month_map = {
         "janeiro": 1, "fevereiro": 2, "março": 3, "marco": 3,
         "abril": 4, "maio": 5, "junho": 6, "julho": 7,
@@ -42,48 +38,63 @@ def parse_draws(html):
         "novembro": 11, "dezembro": 12,
     }
 
-    contest_pattern = re.compile(r"Concurso\s+(\d+)", re.IGNORECASE)
-    date_pattern = re.compile(
-        r"(\d{1,2})\s+de\s+([a-zçãé]+)\s+de\s+(\d{4})",
-        re.IGNORECASE
-    )
-
     draws = []
 
     for box in calendar_boxes:
-        text = box.get_text(" ", strip=True)
+        # Each calendar-box contains one draw:
+        #   <div class="date">Terça-feira, 10 de março de 2026</div>
+        #   <div class="bottom">
+        #       ...
+        #       <div class="number">2982</div>
+        #       ...
+        #   </div>
 
-        contests = list(contest_pattern.finditer(text))
-        dates = list(date_pattern.finditer(text))
+        date_div = box.select_one("div.date")
+        number_div = box.select_one("div.bottom div.number")
 
-        def find_next_date(start_idx):
-            for d in dates:
-                if d.start() > start_idx:
-                    return d
-            return None
+        if not date_div or not number_div:
+            continue
 
-        for c in contests:
-            contest_num = c.group(1)
-            dmatch = find_next_date(c.end())
-            if not dmatch:
-                continue
+        date_text = date_div.get_text(strip=True)
+        contest_text = number_div.get_text(strip=True)
 
-            day = int(dmatch.group(1))
-            month_name = dmatch.group(2).lower()
-            year = int(dmatch.group(3))
+        # Extract contest number (e.g. "2982")
+        contest_num_match = re.search(r"(\d+)", contest_text)
+        if not contest_num_match:
+            continue
+        contest_num = contest_num_match.group(1)
 
-            month = month_map.get(month_name)
-            if not month:
-                continue
+        # Extract date from something like:
+        # "Terça-feira, 10 de março de 2026"
+        # We'll strip weekday and focus on "10 de março de 2026"
+        # by finding the first digit and slicing from there.
+        m = re.search(r"(\d{1,2}\s+de\s+[a-zçãé]+\s+de\s+\d{4})", date_text, re.IGNORECASE)
+        if not m:
+            continue
 
-            local_dt = datetime(year, month, day, 12, 0, tzinfo=BRT)
+        date_core = m.group(1)  # "10 de março de 2026"
+        parts = date_core.lower().split()
+        # parts: ["10", "de", "março", "de", "2026"]
+        try:
+            day = int(parts[0])
+            month_name = parts[2]
+            year = int(parts[4])
+        except (IndexError, ValueError):
+            continue
 
-            draws.append({
-                "contest": contest_num,
-                "date": local_dt
-            })
+        month = month_map.get(month_name)
+        if not month:
+            continue
 
-    # Deduplicate by contest number
+        # 12:00 BRT
+        local_dt = datetime(year, month, day, 12, 0, tzinfo=BRT)
+
+        draws.append({
+            "contest": contest_num,
+            "date": local_dt
+        })
+
+    # Deduplicate by contest number (keep earliest date)
     unique = {}
     for d in draws:
         cnum = d["contest"]
