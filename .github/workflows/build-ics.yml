@@ -28,7 +28,7 @@ jobs:
           python generate_megasena_ics.py
 
       - name: Commit and push changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "Update megasena.ics"
           file_pattern: "megasena.ics"
