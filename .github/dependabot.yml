@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Maintain dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      # Check for updates every week (you can change this to daily)
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    # This will ensure your actions stay on the latest major versions
+    # and will notify you when things move to Node 26, etc.
+    groups:
+      github-actions-updates:
+        patterns:
+          - "*"
+
+  # Optional: If you want to keep your Python dependencies updated too
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
