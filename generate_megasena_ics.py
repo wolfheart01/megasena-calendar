@@ -155,6 +155,11 @@ def generate_ics(draws):
         lines.append(f"DTSTART:{dtstart}")
         lines.append(f"DTEND:{dtend}")
         lines.append(f"SUMMARY:{summary}")
+        lines.append("BEGIN:VALARM")
+        lines.append("TRIGGER;VALUE=DURATION:PT0S")
+        lines.append("ACTION:DISPLAY")
+        lines.append("DESCRIPTION:HOJE Sorteio da Mega-Sena")
+        lines.append("END:VALARM")
         lines.append("END:VEVENT")
 
     lines.append("END:VCALENDAR")
